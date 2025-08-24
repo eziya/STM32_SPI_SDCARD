@@ -145,11 +145,10 @@ static bool SD_RxDataBlock(BYTE *buff, UINT btr)
     return FALSE;
   
   /* 버퍼에 데이터 수신 */
-  do 
+  while(btr--) 
   {     
     SPI_RxBytePtr(buff++);
-    SPI_RxBytePtr(buff++);
-  } while(btr -= 2);
+  }
   
   SPI_RxByte(); /* CRC 무시 */
   SPI_RxByte();
@@ -161,8 +160,8 @@ static bool SD_RxDataBlock(BYTE *buff, UINT btr)
 #if _READONLY == 0
 static bool SD_TxDataBlock(const BYTE *buff, BYTE token)
 {
-  uint8_t resp, wc;
-  uint8_t i = 0;
+  uint8_t resp = 0xFF, i = 0;  /* resp 초기화 */
+  uint16_t wc;
     
   /* SD카드 준비 대기 */
   if (SD_ReadyWait() != 0xFF)
@@ -174,14 +173,13 @@ static bool SD_TxDataBlock(const BYTE *buff, BYTE token)
   /* 데이터 토큰인 경우 */
   if (token != 0xFD) 
   { 
-    wc = 0;
+    wc = 512;
     
     /* 512 바이트 데이터 전송 */
-    do 
+    while(wc--) 
     { 
       SPI_TxByte(*buff++);
-      SPI_TxByte(*buff++);
-    } while (--wc);
+    }
     
     SPI_RxByte();       /* CRC 무시 */
     SPI_RxByte();
@@ -198,8 +196,9 @@ static bool SD_TxDataBlock(const BYTE *buff, BYTE token)
       i++;
     }
     
-    /* SPI 수신 버퍼 Clear */
-    while (SPI_RxByte() == 0);
+    /* SPI 수신 버퍼 Clear - 타임아웃 추가 */
+    Timer1 = 20; /* 200ms 타임아웃 */
+    while (SPI_RxByte() == 0 && Timer1);
   }
   
   if ((resp & 0x1F) == 0x05)
@@ -514,9 +513,9 @@ DRESULT SD_disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
       {
         if ((csd[0] >> 6) == 1) 
         { 
-          /* SDC ver 2.00 */
-          csize = csd[9] + ((WORD) csd[8] << 8) + 1;
-          *(DWORD*) buff = (DWORD) csize << 10;
+          /* SDC ver 2.00 - 정확한 C_SIZE 필드 파싱 */
+          csize = ((DWORD)(csd[7] & 0x3F) << 16) | ((DWORD)csd[8] << 8) | csd[9];
+          *(DWORD*) buff = (csize + 1) << 10;
         } 
         else 
         { 
@@ -564,7 +563,8 @@ DRESULT SD_disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
         }
         
         res = RES_OK;
-      }     
+      }
+      break;     
       
     default:
       res = RES_PARERR;
