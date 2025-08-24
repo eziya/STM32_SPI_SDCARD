@@ -1598,7 +1598,7 @@ __weak void HAL_SD_AbortCallback(SD_HandleTypeDef *hsd)
   UNUSED(hsd);
  
   /* NOTE : This function should not be modified, when the callback is needed,
-            the HAL_SD_ErrorCallback can be implemented in the user file
+            the HAL_SD_AbortCallback can be implemented in the user file
    */ 
 }
 
